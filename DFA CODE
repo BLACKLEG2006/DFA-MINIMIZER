@@ -1,0 +1,100 @@
+import java.util.*;
+
+public class DFAMinimizer {
+
+    static class DFA {
+        Set<Integer> states, finals;
+        int start;
+        Map<Integer, Map<Character, Integer>> trans;
+
+        DFA(Set<Integer> states, int start, Set<Integer> finals,
+            Map<Integer, Map<Character, Integer>> trans) {
+            this.states = states; this.start = start;
+            this.finals = finals; this.trans = trans;
+        }
+    }
+
+    public static DFA minimize(DFA dfa, Set<Character> alphabet) {
+        int n = dfa.states.size();
+        List<Integer> list = new ArrayList<>(dfa.states);
+        boolean[][] table = new boolean[n][n];
+
+        // mark final vs non-final
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++)
+                if (dfa.finals.contains(list.get(i)) != dfa.finals.contains(list.get(j)))
+                    table[i][j] = true;
+
+        // propagate distinction
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                    if (!table[i][j]) {
+                        for (char c : alphabet) {
+                            int ti = dfa.trans.get(list.get(i)).get(c);
+                            int tj = dfa.trans.get(list.get(j)).get(c);
+                            int ii = list.indexOf(ti), jj = list.indexOf(tj);
+                            if (ii > jj) { int t = ii; ii = jj; jj = t; }
+                            if (table[ii][jj]) {
+                                table[i][j] = true;
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+        }
+
+        // build groups
+        Map<Integer, Integer> rep = new HashMap<>();
+        int gid = 0;
+        for (int i = 0; i < n; i++) {
+            if (!rep.containsKey(list.get(i))) {
+                rep.put(list.get(i), gid);
+                for (int j = i + 1; j < n; j++)
+                    if (!table[i][j]) rep.put(list.get(j), gid);
+                gid++;
+            }
+        }
+
+        // minimized DFA
+        Set<Integer> newStates = new HashSet<>(rep.values());
+        int newStart = rep.get(dfa.start);
+        Set<Integer> newFinals = new HashSet<>();
+        Map<Integer, Map<Character, Integer>> newTrans = new HashMap<>();
+
+        for (int s : newStates) newTrans.put(s, new HashMap<>());
+        for (int s : dfa.states) {
+            int rs = rep.get(s);
+            if (dfa.finals.contains(s)) newFinals.add(rs);
+            for (char c : alphabet)
+                newTrans.get(rs).put(c, rep.get(dfa.trans.get(s).get(c)));
+        }
+
+        return new DFA(newStates, newStart, newFinals, newTrans);
+    }
+
+    public static void main(String[] args) {
+
+        Set<Integer> states = Set.of(0, 1, 2, 3);
+        Set<Character> alphabet = Set.of('a', 'b');
+        Set<Integer> finals = Set.of(2, 3);
+
+        Map<Integer, Map<Character, Integer>> trans = new HashMap<>();
+        trans.put(0, Map.of('a', 1, 'b', 2));
+        trans.put(1, Map.of('a', 0, 'b', 3));
+        trans.put(2, Map.of('a', 3, 'b', 2));
+        trans.put(3, Map.of('a', 3, 'b', 2));
+
+        DFA dfa = new DFA(states, 0, finals, trans);
+        DFA min = minimize(dfa, alphabet);
+
+        System.out.println("Minimized States: " + min.states);
+        System.out.println("Minimized Start: " + min.start);
+        System.out.println("Minimized Finals: " + min.finals);
+        System.out.println("Transitions:");
+        for (int s : min.states)
+            System.out.println("  " + s + ": " + min.trans.get(s));
+    }
+}
